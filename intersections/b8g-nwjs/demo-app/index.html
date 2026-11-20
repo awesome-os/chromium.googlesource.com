@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>B8G-NW.js — Mixed Context (Node + DOM)</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: radial-gradient(circle at 80% 15%, #1d1538 0%, #090c14 68%);
+      color: #e2e8f0;
+      min-height: 100vh;
+      padding: 28px;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+    h1 { color: #c084fc; font-size: 22px; }
+    .sub { color: #94a3b8; font-size: 13px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+    .card {
+      background: rgba(15, 23, 42, 0.8);
+      border: 1px solid rgba(192, 132, 252, 0.25);
+      border-radius: 10px;
+      padding: 14px;
+    }
+    .k { font-size: 11px; text-transform: uppercase; letter-spacing: 0.8px; color: #a78bfa; }
+    .v { font-size: 15px; font-weight: 600; margin-top: 6px; color: #f8fafc; }
+    pre {
+      background: #05070d;
+      border: 1px solid rgba(192, 132, 252, 0.25);
+      border-radius: 10px;
+      padding: 14px;
+      font-family: Consolas, monospace;
+      font-size: 12.5px;
+      color: #e9d5ff;
+      white-space: pre-wrap;
+    }
+  </style>
+</head>
+<body>
+  <div>
+    <h1>🧬 B8G-NW.js — Direct Node.js Inside the DOM Context</h1>
+    <p class="sub">Zero main.js. Zero preload boilerplate. Direct <code>require('os')</code>, <code>require('fs')</code>, <code>window.nw</code>, and <code>process</code> inside HTML on ONE shared Chromium core.</p>
+  </div>
+
+  <div class="grid">
+    <div class="card"><div class="k">NW.js App Manifest</div><div class="v" id="manifestName">—</div></div>
+    <div class="card"><div class="k">process.versions</div><div class="v" id="versions">—</div></div>
+    <div class="card"><div class="k">require('os').hostname()</div><div class="v" id="host">—</div></div>
+    <div class="card"><div class="k">App Directory Files (require('fs'))</div><div class="v" id="files">—</div></div>
+  </div>
+
+  <pre id="out"></pre>
+
+  <script>
+    // Pure NW.js mixed-context: call Node modules & nw.* straight from the DOM!
+    const os = require('os');
+    const fs = require('fs');
+
+    document.getElementById('manifestName').textContent = `${nw.App.manifest.name} v${nw.App.manifest.version}`;
+    document.getElementById('versions').textContent = `nw=${process.versions.nw} | node=${process.versions.node}`;
+    document.getElementById('host').textContent = `${os.hostname()} (${os.cpus().length}T ${os.platform()}/${os.arch()})`;
+
+    (async () => {
+      const list = await fs.promises.readdir('.');
+      document.getElementById('files').textContent = list.join(', ');
+      const pkg = await fs.promises.readFile('package.json');
+      document.getElementById('out').textContent = `// Read directly from DOM via require('fs').promises.readFile('package.json'):\n${pkg}`;
+    })();
+  </script>
+</body>
+</html>

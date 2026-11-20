@@ -1,0 +1,6 @@
+{
+  "name": "b8g-electron-demo-app",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "main.mts"
+}

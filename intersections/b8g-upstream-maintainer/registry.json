@@ -1,0 +1,97 @@
+{
+  "schemaVersion": 1,
+  "motto": "Nunquam ante, numquam iterum",
+  "upstreams": [
+    {
+      "id": "chromium",
+      "kind": "git-repo",
+      "localPath": "E:\\b8g-chromium-real\\src",
+      "remoteUrl": "https://github.com/chromium/chromium.git",
+      "trackRef": "HEAD",
+      "projection": "sections/chromium-build/",
+      "verifyCmd": ".\\bin\\b8g-chrome-dev.cmd status"
+    },
+    {
+      "id": "node-src",
+      "kind": "git-sparse",
+      "localPath": "E:\\b8g-node-src",
+      "remoteUrl": "https://github.com/nodejs/node.git",
+      "trackRef": "refs/heads/main",
+      "sparsePaths": ["src", "lib"],
+      "projection": "sections/chromium-build/node-embed-abi/",
+      "verifyCmd": "E:\\b8g-chromium-real\\src\\out\\B8gRelease\\b8g_libnode_probe.exe"
+    },
+    {
+      "id": "nwjs",
+      "kind": "git-sparse",
+      "localPath": "E:\\b8g-nwjs",
+      "remoteUrl": "https://github.com/nwjs/nw.js.git",
+      "trackRef": "HEAD",
+      "sparsePaths": ["src/api", "src/browser", "src/renderer"],
+      "projection": "intersections/b8g-nwjs/",
+      "verifyCmd": ".\\bin\\node.cmd --test intersections/b8g-nwjs/b8g-nwjs.test.mts"
+    },
+    {
+      "id": "vscode-oss",
+      "kind": "git-repo",
+      "localPath": "E:\\awesome-os\\third_party\\vscode-oss",
+      "remoteUrl": "https://github.com/microsoft/vscode.git",
+      "trackRef": "refs/heads/main",
+      "projection": "intersections/b8g-vscode-oss/",
+      "verifyCmd": ".\\bin\\node.cmd --test intersections/b8g-vscode-oss/b8g-vscode-oss.test.mts"
+    },
+    {
+      "id": "workerd",
+      "kind": "git-sparse",
+      "localPath": "E:\\awesome-os\\third_party\\workerd",
+      "remoteUrl": "https://github.com/cloudflare/workerd.git",
+      "trackRef": "refs/heads/main",
+      "sparsePaths": ["src/workerd/api", "src/workerd/jsg", "src/workerd/server"],
+      "projection": "intersections/b8g-workerd-wasi/",
+      "verifyCmd": ".\\bin\\node.cmd --test intersections/b8g-workerd-wasi/b8g-worker-wasi-host.test.mts"
+    },
+    {
+      "id": "wasmer",
+      "kind": "git-sparse",
+      "localPath": "E:\\awesome-os\\third_party\\wasmer",
+      "remoteUrl": "https://github.com/wasmerio/wasmer.git",
+      "trackRef": "refs/heads/main",
+      "sparsePaths": ["lib/wasix", "lib/wasi-types", "lib/virtual-fs"],
+      "projection": "intersections/b8g-workerd-wasi/",
+      "verifyCmd": ".\\bin\\node.cmd --test intersections/b8g-workerd-wasi/b8g-worker-wasi-host.test.mts"
+    },
+    {
+      "id": "obs-studio",
+      "kind": "git-repo",
+      "localPath": "E:\\b8g-obs-studio",
+      "remoteUrl": "https://github.com/obsproject/obs-studio.git",
+      "trackRef": "refs/heads/master",
+      "projection": "intersections/b8g-stream/",
+      "verifyCmd": ".\\bin\\node.cmd --test intersections/b8g-stream/b8g-stream.test.mts"
+    },
+    {
+      "id": "powershell-dotnet-compat",
+      "kind": "spec-tracker",
+      "localPath": "E:\\awesome-os\\intersections\\b8g-ps-compat",
+      "remoteUrl": "https://github.com/PowerShell/PowerShell.git",
+      "trackRef": "refs/heads/master",
+      "dotnetRuntimeUrl": "https://github.com/dotnet/runtime.git",
+      "projection": "intersections/b8g-ps-compat/",
+      "verifyCmd": ".\\bin\\node.cmd --test intersections/b8g-ps-compat/ps-compat.test.mts",
+      "compatLedger": {
+        "cmdletsImplemented": 21,
+        "cmdletsCoreTarget": 50,
+        "bclNamespacesImplemented": [
+          "System.IO.File",
+          "System.IO.Directory",
+          "System.IO.Path",
+          "System.Math",
+          "System.Environment",
+          "System.Text.Encoding",
+          "System.Guid",
+          "System.DateTime"
+        ]
+      }
+    }
+  ]
+}

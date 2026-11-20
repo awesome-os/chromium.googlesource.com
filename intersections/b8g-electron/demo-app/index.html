@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>B8G-Electron — Zero-Copy Shared Chromium</title>
+  <style>
+    :root { color-scheme: dark; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      background: radial-gradient(circle at 20% 10%, #162238 0%, #0b0f17 65%);
+      color: #e2e8f0;
+      min-height: 100vh;
+      padding: 28px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid rgba(110, 215, 255, 0.2);
+      padding-bottom: 14px;
+    }
+    h1 { font-size: 22px; font-weight: 700; color: #7dd3fc; letter-spacing: 0.4px; }
+    .badge {
+      background: rgba(52, 211, 153, 0.16);
+      border: 1px solid rgba(52, 211, 153, 0.5);
+      color: #6ee7b7;
+      padding: 5px 12px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 14px;
+    }
+    .card {
+      background: rgba(17, 24, 39, 0.78);
+      border: 1px solid rgba(148, 163, 184, 0.18);
+      border-radius: 12px;
+      padding: 16px;
+    }
+    .label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.9px; color: #94a3b8; }
+    .val { font-size: 16px; font-weight: 600; margin-top: 6px; word-break: break-all; color: #f8fafc; }
+    .controls { display: flex; gap: 10px; flex-wrap: wrap; }
+    button {
+      background: linear-gradient(135deg, #0284c7, #2563eb);
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      padding: 10px 18px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    button:hover { filter: brightness(1.12); }
+    pre {
+      background: #060911;
+      border: 1px solid rgba(125, 211, 252, 0.2);
+      border-radius: 10px;
+      padding: 14px;
+      font-family: Consolas, 'Cascadia Code', monospace;
+      font-size: 12.5px;
+      color: #a5f3fc;
+      min-height: 120px;
+      white-space: pre-wrap;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>⚡ B8G-Electron — Zero-Copy Shared Chromium</h1>
+    <span class="badge" id="tickBadge">IPC Live • Waiting for tick…</span>
+  </header>
+
+  <div class="grid">
+    <div class="card">
+      <div class="label">Shared Chromium Engine</div>
+      <div class="val" id="chromePath">Loading…</div>
+    </div>
+    <div class="card">
+      <div class="label">Duplicated Chromium Per App</div>
+      <div class="val" style="color:#6ee7b7">0 MB (100% Shared Core)</div>
+    </div>
+    <div class="card">
+      <div class="label">Host Silicon</div>
+      <div class="val" id="hostCpu">Loading…</div>
+    </div>
+    <div class="card">
+      <div class="label">IPC Round-Trip Latency</div>
+      <div class="val" id="rttVal">—</div>
+    </div>
+  </div>
+
+  <div class="controls">
+    <button id="btnPing">⚡ Ping ipcMain.handle()</button>
+    <button id="btnSend">📨 Send ipcRenderer.send()</button>
+    <button id="btnBench">🏎️ Run 25× IPC Latency Bench</button>
+  </div>
+
+  <pre id="log"></pre>
+
+  <script>
+    const logEl = document.getElementById('log');
+    const appendLog = (line) => {
+      logEl.textContent = `[${new Date().toLocaleTimeString()}] ${line}\n` + logEl.textContent;
+    };
+
+    async function boot() {
+      const info = await window.b8gApi.getSysInfo();
+      document.getElementById('chromePath').textContent = info.chromePath;
+      document.getElementById('hostCpu').textContent = `${info.cpu} (${info.cores}T, ${info.freeRamGB}/${info.totalRamGB} GB RAM)`;
+      appendLog(`Connected to B8G-Electron main (Node ${info.nodeVersion}, 0 MB duplicated Chromium)`);
+    }
+
+    window.b8gApi.onTick((d) => {
+      document.getElementById('tickBadge').textContent = `IPC Live • Main Tick #${d.tick} (${d.time})`;
+    });
+
+    window.b8gApi.onLogAck((ack) => appendLog(ack));
+
+    document.getElementById('btnPing').addEventListener('click', async () => {
+      const t0 = performance.now();
+      const res = await window.b8gApi.ping('Nunquam ante, numquam iterum');
+      const rtt = (performance.now() - t0).toFixed(2);
+      document.getElementById('rttVal').textContent = `${rtt} ms`;
+      appendLog(`invoke('b8g:ping') -> ${JSON.stringify(res)} in ${rtt} ms`);
+    });
+
+    document.getElementById('btnSend').addEventListener('click', () => {
+      window.b8gApi.sendLog('Hello from shared Chromium renderer!');
+    });
+
+    document.getElementById('btnBench').addEventListener('click', async () => {
+      const t0 = performance.now();
+      for (let i = 0; i < 25; i++) {
+        await window.b8gApi.ping(`bench-${i}`);
+      }
+      const avg = ((performance.now() - t0) / 25).toFixed(2);
+      document.getElementById('rttVal').textContent = `${avg} ms avg (25×)`;
+      appendLog(`25× ipcRenderer.invoke() -> avg ${avg} ms/call`);
+    });
+
+    boot();
+  </script>
+</body>
+</html>
