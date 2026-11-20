@@ -1,0 +1,5 @@
+1f08a7a981d1f990336ce0dadddb10cb9cc678cecc816678d46b22925afd8ff0  b8g-chrome-abi-win64.zip
+8da4eb1da60b8219ab47b34920e933d2f2a81705d5ff480da2d7250815a63d2d  b8g-chrome-abi-linux-x64.tar.gz
+ee82c570038a48e5125f07f9bd89515671d524203c8a5c96cfec46980f1e0a7b  b8g-shells-suite-win64.zip
+401404345cf605007cf529bba77eceb770523b4198b3c4ccf3205f8ca902b0cb  b8g-white-dragon-and-demos.zip
+b85fa847988a4f5dd66605cdd7455093602e4deecc5ff204050f74c070095300  b8g-chromium-full-win64.zip

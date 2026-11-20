@@ -1,0 +1,68 @@
+{
+  "tag": "v2026.11.20-b8g-sovereign",
+  "createdAt": "2026-11-20T07:11:26.716Z",
+  "motto": "Nunquam ante, numquam iterum",
+  "awesomeOs": {
+    "branch": "unknown",
+    "commit": "unknown"
+  },
+  "upstreamChromium": {
+    "branch": "unknown",
+    "commit": "unknown"
+  },
+  "abiBinariesIncluded": [
+    "b8g_brotli_abi.dll",
+    "b8g_chrome.exe",
+    "b8g_chrome_facade.dll",
+    "b8g_cloud_sync_google_abi.dll",
+    "b8g_cloud_sync_local_abi.dll",
+    "b8g_cloud_sync_oss_abi.dll",
+    "b8g_dav1d_abi.dll",
+    "b8g_dawn_abi.dll",
+    "b8g_ffmpeg_abi.dll",
+    "b8g_freetype_abi.dll",
+    "b8g_harfbuzz_abi.dll",
+    "b8g_icu_abi.dll",
+    "b8g_ipcz_abi.dll",
+    "b8g_jpeg_abi.dll",
+    "b8g_libnode_abi.dll",
+    "b8g_libnode_probe.exe",
+    "b8g_mojo_abi.dll",
+    "b8g_node.exe",
+    "b8g_pdfium_abi.dll",
+    "b8g_skia_abi.dll",
+    "b8g_sqlite_abi.dll",
+    "b8g_tls_abi.dll",
+    "b8g_viz_abi.dll",
+    "b8g_webp_abi.dll",
+    "b8g_webrtc_abi.dll",
+    "b8g_zstd_abi.dll"
+  ],
+  "artifacts": [
+    {
+      "file": "b8g-chrome-abi-win64.zip",
+      "bytes": 1495967,
+      "sha256": "1f08a7a981d1f990336ce0dadddb10cb9cc678cecc816678d46b22925afd8ff0"
+    },
+    {
+      "file": "b8g-chrome-abi-linux-x64.tar.gz",
+      "bytes": 1669257,
+      "sha256": "8da4eb1da60b8219ab47b34920e933d2f2a81705d5ff480da2d7250815a63d2d"
+    },
+    {
+      "file": "b8g-shells-suite-win64.zip",
+      "bytes": 92112,
+      "sha256": "ee82c570038a48e5125f07f9bd89515671d524203c8a5c96cfec46980f1e0a7b"
+    },
+    {
+      "file": "b8g-white-dragon-and-demos.zip",
+      "bytes": 40996,
+      "sha256": "401404345cf605007cf529bba77eceb770523b4198b3c4ccf3205f8ca902b0cb"
+    },
+    {
+      "file": "b8g-chromium-full-win64.zip",
+      "bytes": 612885304,
+      "sha256": "b85fa847988a4f5dd66605cdd7455093602e4deecc5ff204050f74c070095300"
+    }
+  ]
+}
