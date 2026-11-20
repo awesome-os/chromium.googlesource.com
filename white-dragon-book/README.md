@@ -64,3 +64,5 @@ summary: "A modern successor to the Green (1977), Red (1986), and Purple (2006) 
   - Executive architectural map showing how Chrome, Node.js, Electron, NW.js, Code-OSS, Terminal Chrome, Workerd/WASI, OBS, Git Forge, and Zero-CLR PowerShell/.NET collapse into thin projections over ONE shared Chromium + V8 core.
 - **[Article 1: Unmatched Developer Productivity — Build at the Speed of Intent](./articles/01-build-at-the-speed-of-intent.md)**
   - Why remote CI queues are a tax on slow Von Neumann toolchains — and how local, real-time, zero-header CAS compilation stamps out verified native software on real hardware at the speed of intent.
+- **[Article 2: The 11.8 KB Binary Strangler Fig — Replacing a 166 MB Monolith Without Forking It](./articles/02-strangler-fig-binary-facade.md)**
+  - Reducing `chrome.dll` (`166.41 MB`) to its single `ChromeMain` C export, booting `B8G-ABI` + `B8gCloudSyncAbi` + `b8g_libnode_abi` in `1.996 ms`, and cross-compiling Win64 DLL + Linux x86_64 ELF `.so` (`11.8 KB`) from one Windows box via Zig `0.14.1`.

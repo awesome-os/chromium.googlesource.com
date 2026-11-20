@@ -44,7 +44,7 @@ Every row below is backed by live code, automated tests, and human verification 
 
 | # | Ecosystem Adopted / Replaced | Conventional Footprint & Pain | Our Sovereign Projection | Measured Proof |
 | :-: | :--- | :--- | :--- | :--- |
-| **1** | **Google Chrome / Chromium** | `2,553 KB` exe, `45+` headers, `2.5 h` builds, hardcoded Google Cloud Sync | **`b8g_chrome.exe` (`156 KB`, `1` header)** + 18 `B8G-ABI` DLLs + 3 hot-swappable `B8gCloudSyncAbi` DLLs (`oss`/`google`/`local`) | **`3.83 ms`** warm 18-DLL rebuild, **`4.03 ms`** boot, **`~350 µs`** live sync provider swap |
+| **1** | **Google Chrome / Chromium** | `2,553 KB` exe, `166.41 MB` `chrome.dll`, `2.5 h` builds, hardcoded Google Cloud Sync | **`b8g_chrome.exe` (`156 KB`)** + **`b8g_chrome_facade` (`149 KB` Win64 / `11.8 KB` Linux ELF)** + 19 `B8G-ABI` DLLs + 3 hot-swappable `B8gCloudSyncAbi` DLLs | **`3.83 ms`** warm rebuild, **`4.03 ms`** boot, **`1.996 ms`** `ChromeMain` facade intercept, **`~350 µs`** live sync swap |
 | **2** | **Node.js (`node.exe`)** | `~80 MB` standalone binary + `~1.2 GB` repo carrying duplicate V8/ICU/OpenSSL | **`b8g_node.exe` (`150.5 KB`)** + **`b8g_libnode_abi.dll` (`109 KB`)** + `14.24 MB` sparse `src+lib` | **`0 B` duplicated V8**, **`1.83 ms`** live bind to shared `88.69 MB` `v8.dll` |
 | **3** | **Carbonyl / Terminal Browsers** | Abandoned C++ Chromium patches + `6.29 MB` Docker/SSH/`tmux` wrapper | **`.\bin\b8g-terminal-chrome`** (`ansi` True Carbonyl Hybrid `▀` + crisp DOM text + live UI frame, plus `kitty` APC) | **`99.92%`** bloat deleted, `7/7` tests, live `cmd.exe` + `pwsh` verified |
 | **4** | **Electron** | `150–300 MB` duplicated Chromium per app + 6-month rebase lag | **`.\bin\b8g-electron`** (`app`, `BrowserWindow`, `ipcMain`, `ipcRenderer`, `contextBridge`, `preload`) | **`0 MB` duplicated Chromium per app**, `0` C++ patches, live IPC test passing |
@@ -65,4 +65,4 @@ Every row below is backed by live code, automated tests, and human verification 
 
 ---
 
-> See also: [The White Dragon Book](./white-dragon-book/README.md) · [Article 1: Build at the Speed of Intent](./white-dragon-book/articles/01-build-at-the-speed-of-intent.md)
+> See also: [The White Dragon Book](./white-dragon-book/README.md) · [Article 1: Build at the Speed of Intent](./white-dragon-book/articles/01-build-at-the-speed-of-intent.md) · [Article 2: The 11.8 KB Binary Strangler Fig](./white-dragon-book/articles/02-strangler-fig-binary-facade.md)
