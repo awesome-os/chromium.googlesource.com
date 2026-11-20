@@ -66,3 +66,5 @@ summary: "A modern successor to the Green (1977), Red (1986), and Purple (2006) 
   - Why remote CI queues are a tax on slow Von Neumann toolchains — and how local, real-time, zero-header CAS compilation stamps out verified native software on real hardware at the speed of intent.
 - **[Article 2: The 11.8 KB Binary Strangler Fig — Replacing a 166 MB Monolith Without Forking It](./articles/02-strangler-fig-binary-facade.md)**
   - Reducing `chrome.dll` (`166.41 MB`) to its single `ChromeMain` C export, booting `B8G-ABI` + `B8gCloudSyncAbi` + `b8g_libnode_abi` in `1.996 ms`, and cross-compiling Win64 DLL + Linux x86_64 ELF `.so` (`11.8 KB`) from one Windows box via Zig `0.14.1`.
+- **[Article 3: Semantic ABI Stability — Why Strict Versioned C11 Tables Turn Monoliths Into Immortal Platforms](./articles/03-semantic-abi-stability-superpower.md)**
+  - How strict `abi_version` + `struct_size` + zero-header C11 dispatch tables eliminate C++ version-hell and enable the clean **Consumer Browser + `244.3 KB` Dev Bundle Addon** product model.

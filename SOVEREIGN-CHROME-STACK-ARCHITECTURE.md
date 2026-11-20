@@ -61,8 +61,8 @@ Every row below is backed by live code, automated tests, and human verification 
 1. **Zero Per-Shell Chromium Patches:** Because `b8g-terminal-chrome`, `b8g-electron`, `b8g-nwjs`, `b8g-vscode`, and `b8g-stream` sit strictly outside Chromium's C++ internals, upgrading the single Chromium core upgrades **every shell simultaneously**.
 2. **Atomic Cross-Shell Invariant (`.\bin\b8g-bin-parity verify`):** Guarantees **`115/115` (`0` violations)** — every CLI tool exists as an atomic `(posix, cmd+UTF8, ps1)` triplet.
 3. **Live 8-Upstream Auto-Update Inference Point (`.\bin\b8g-maintain`):** Tracks all 8 upstream repos live (`status --remote`), runs the full verification suite (`check-all`), and exposes an HTTP JSON inference endpoint (`serve --port 7430`: `/api/status`, `/api/plan`, `/api/verify`).
-4. **Checksummed Sovereign Releases (`.\bin\b8g-release`):** Packages `b8g_chrome.exe`, `b8g_node.exe`, all `B8G-ABI` DLLs, all shells, and optional `--full` runnable Chromium binaries with `SHA256SUMS.txt` and `RELEASE-MANIFEST.json`.
+4. **Clean Consumer + Optional Dev Addon Releases (`.\bin\b8g-release`):** Enforces the Rule of One — **one** consumer download (`B8G-Chrome-win64.zip` with zero-console `B8G-Chrome.exe` at root) plus **one** optional `244.3 KB` `B8G-Dev-Bundle-Addon-win64.zip` made possible by strict semantic `B8G-ABI` stability.
 
 ---
 
-> See also: [The White Dragon Book](./white-dragon-book/README.md) · [Article 1: Build at the Speed of Intent](./white-dragon-book/articles/01-build-at-the-speed-of-intent.md) · [Article 2: The 11.8 KB Binary Strangler Fig](./white-dragon-book/articles/02-strangler-fig-binary-facade.md)
+> See also: [The White Dragon Book](./white-dragon-book/README.md) · [Article 1: Build at the Speed of Intent](./white-dragon-book/articles/01-build-at-the-speed-of-intent.md) · [Article 2: The 11.8 KB Binary Strangler Fig](./white-dragon-book/articles/02-strangler-fig-binary-facade.md) · [Article 3: Semantic ABI Stability](./white-dragon-book/articles/03-semantic-abi-stability-superpower.md)
