@@ -1,0 +1,1051 @@
+From ff4f81bb5f308f628bb8f373ff997da5a14b4332 Mon Sep 17 00:00:00 2001
+From: Frank Lemanschik <117739566+lemanschik@users.noreply.github.com>
+Date: Fri, 20 Nov 2026 03:58:55 +0100
+Subject: [PATCH] [b8g-abi] Verified Win11 chrome.exe build + ipcz SPSC
+ fast-path + 3 zero-dep B8G-ABI DLLs
+
+---
+ base/win/windows_version.cc                   |   4 +-
+ build/config/win/BUILD.gn                     |   2 +-
+ build/toolchain/win/setup_toolchain.py        |   2 +-
+ components/viz/common/BUILD.gn                |   6 +
+ .../common/quads/b8g_viz_quad_abi_export.cc   |  46 +++
+ .../viz/common/quads/b8g_viz_quad_slab.h      |  63 ++++
+ mojo/core/BUILD.gn                            |   6 +
+ mojo/core/b8g_mojo_abi_export.cc              | 282 ++++++++++++++++++
+ testing/scripts/common.py                     |   2 +-
+ third_party/ipcz/src/BUILD.gn                 |   7 +
+ .../ipcz/src/ipcz/b8g_chromium_abi_table.h    | 131 ++++++++
+ .../ipcz/src/ipcz/b8g_ipcz_abi_export.cc      |  99 ++++++
+ .../ipcz/src/ipcz/b8g_ipcz_spsc_ring.h        | 186 ++++++++++++
+ third_party/ipcz/src/ipcz/router.cc           |  35 +++
+ third_party/ipcz/src/ipcz/router.h            |   7 +
+ 15 files changed, 873 insertions(+), 5 deletions(-)
+ create mode 100644 components/viz/common/quads/b8g_viz_quad_abi_export.cc
+ create mode 100644 components/viz/common/quads/b8g_viz_quad_slab.h
+ create mode 100644 mojo/core/b8g_mojo_abi_export.cc
+ create mode 100644 third_party/ipcz/src/ipcz/b8g_chromium_abi_table.h
+ create mode 100644 third_party/ipcz/src/ipcz/b8g_ipcz_abi_export.cc
+ create mode 100644 third_party/ipcz/src/ipcz/b8g_ipcz_spsc_ring.h
+
+diff --git a/base/win/windows_version.cc b/base/win/windows_version.cc
+index 1a24872d20..5f4858260a 100644
+--- a/base/win/windows_version.cc
++++ b/base/win/windows_version.cc
+@@ -27,8 +27,8 @@
+ #error VS 2017 Update 3.2 or higher is required
+ #endif
+ 
+-#if !defined(NTDDI_WIN11_BR)
+-#error Windows 10.0.28000.0 SDK or higher required.
++#if !defined(NTDDI_WIN11_GE)
++#error Windows 10.0.26100.0 SDK or higher required.
+ #endif
+ 
+ namespace base {
+diff --git a/build/config/win/BUILD.gn b/build/config/win/BUILD.gn
+index 1edf10346d..6c18797450 100644
+--- a/build/config/win/BUILD.gn
++++ b/build/config/win/BUILD.gn
+@@ -305,7 +305,7 @@ config("runtime_library") {
+ # manually override this config for their compiles.
+ config("winver") {
+   defines = [
+-    "NTDDI_VERSION=NTDDI_WIN11_BR",
++    "NTDDI_VERSION=NTDDI_WIN11_GE",
+ 
+     # We can't say `=_WIN32_WINNT_WIN10` here because some files do
+     # `#if WINVER < 0x0600` without including windows.h before,
+diff --git a/build/toolchain/win/setup_toolchain.py b/build/toolchain/win/setup_toolchain.py
+index 34be00a458..13dbabfebf 100644
+--- a/build/toolchain/win/setup_toolchain.py
++++ b/build/toolchain/win/setup_toolchain.py
+@@ -21,7 +21,7 @@ import action_helpers
+ import gn_helpers
+ 
+ SCRIPT_DIR = os.path.dirname(__file__)
+-SDK_VERSION = '10.0.28000.0'
++SDK_VERSION = os.environ.get('B8G_WIN_SDK_VERSION', '10.0.26100.0')
+ MSVC_DIR = re.compile('^.*/VC/Tools/MSVC/[^/]+/include$')
+ WINDOWS_KITS_DIR = re.compile(r'^(.*/Windows Kits/\d+/Include/[^/]+)/.*')
+ 
+diff --git a/components/viz/common/BUILD.gn b/components/viz/common/BUILD.gn
+index cf97a6d722..7300907fa4 100644
+--- a/components/viz/common/BUILD.gn
++++ b/components/viz/common/BUILD.gn
+@@ -324,3 +324,9 @@ fuzzer_test("hit_test_query_fuzzer") {
+     "//ui/gfx:test_support",
+   ]
+ }
++
++shared_library("b8g_viz_abi") {
++  sources = [ "quads/b8g_viz_quad_abi_export.cc" ]
++  deps = []
++  check_includes = false
++}
+diff --git a/components/viz/common/quads/b8g_viz_quad_abi_export.cc b/components/viz/common/quads/b8g_viz_quad_abi_export.cc
+new file mode 100644
+index 0000000000..c07e5eeaa7
+--- /dev/null
++++ b/components/viz/common/quads/b8g_viz_quad_abi_export.cc
+@@ -0,0 +1,46 @@
++// Copyright 2026 Awesome-OS Authors
++// SPDX-License-Identifier: BSD-3-Clause
++//
++// Zero-header, zero-Skia, zero-raw_ptr C-ABI export for B8G Viz 48-byte GPU
++// quad slabs (`b8g::viz_fastpath::B8gVizQuad48`).
++
++#include "third_party/ipcz/src/ipcz/b8g_chromium_abi_table.h"
++
++#include <cstddef>
++
++static_assert(sizeof(B8gVizQuad48C) == 48,
++              "B8gVizQuad48C must be exactly 48 bytes (3 x 16B SIMD/WGSL vec4 lanes)");
++
++namespace {
++
++size_t quad_bytes(void) {
++  return sizeof(B8gVizQuad48C);
++}
++
++#if defined(__clang__)
++#pragma clang unsafe_buffer_usage begin
++#endif
++double compute_coverage_sum(const B8gVizQuad48C* quads, size_t count) {
++  if (!quads || count == 0) {
++    return 0.0;
++  }
++  double acc = 0.0;
++  for (size_t i = 0; i < count; ++i) {
++    acc += static_cast<double>(quads[i].w * quads[i].h * quads[i].a);
++  }
++  return acc;
++}
++#if defined(__clang__)
++#pragma clang unsafe_buffer_usage end
++#endif
++
++constexpr B8gVizDispatchTable kVizDispatchTable = {
++    &quad_bytes,
++    &compute_coverage_sum,
++};
++
++}  // namespace
++
++extern "C" B8G_ABI_EXPORT const B8gVizDispatchTable* b8g_get_viz_table(void) {
++  return &kVizDispatchTable;
++}
+diff --git a/components/viz/common/quads/b8g_viz_quad_slab.h b/components/viz/common/quads/b8g_viz_quad_slab.h
+new file mode 100644
+index 0000000000..843806e57b
+--- /dev/null
++++ b/components/viz/common/quads/b8g_viz_quad_slab.h
+@@ -0,0 +1,63 @@
++// Copyright 2026 Awesome-OS Authors
++// SPDX-License-Identifier: BSD-3-Clause
++//
++// @file sections/chromium-build/viz-fastpath/b8g_viz_quad_slab.h
++// @description Zero-vtable, zero-raw_ptr 48-byte WGSL-native GPU Quad Slab fast-path
++// anchored to Chromium `components/viz/common/quads/draw_quad.h` & `shared_quad_state.h`.
++//
++// Eliminates per-quad `virtual ~DrawQuad()` vtable pointers (+8B), `LargestDrawQuadSize()`
++// union-style padding (~160-192B/quad), and `raw_ptr<const SharedQuadState>` heap indirections
++// for opaque/solid/rounded UI & compositor quads.
++
++#ifndef AWESOME_OS_B8G_VIZ_QUAD_SLAB_H_
++#define AWESOME_OS_B8G_VIZ_QUAD_SLAB_H_
++
++#include <cstddef>
++#include <cstdint>
++#include <vector>
++
++namespace b8g::viz_fastpath {
++
++struct alignas(16) B8gVizQuad48 {
++  float x;
++  float y;
++  float w;
++  float h;
++  float r;
++  float g;
++  float b;
++  float a;
++  float corner_radius;
++  float z_index;
++  uint32_t resource_id;
++  uint32_t flags;
++};
++
++static_assert(sizeof(B8gVizQuad48) == 48,
++              "B8gVizQuad48 must be exactly 48 bytes (3 x 16B SIMD/WGSL vec4 lanes)");
++
++class FlatQuadSlab {
++ public:
++  explicit FlatQuadSlab(size_t reserve_quads = 1024) {
++    quads_.reserve(reserve_quads);
++  }
++
++  void Clear() noexcept { quads_.clear(); }
++
++  void PushSolid(float x, float y, float w, float h,
++                 float r, float g, float b, float a,
++                 float radius = 0.0f, float z = 0.0f, uint32_t flags = 0) {
++    quads_.push_back(B8gVizQuad48{x, y, w, h, r, g, b, a, radius, z, 0u, flags});
++  }
++
++  const B8gVizQuad48* data() const noexcept { return quads_.data(); }
++  size_t size() const noexcept { return quads_.size(); }
++  size_t byte_size() const noexcept { return quads_.size() * sizeof(B8gVizQuad48); }
++
++ private:
++  std::vector<B8gVizQuad48> quads_;
++};
++
++}  // namespace b8g::viz_fastpath
++
++#endif  // AWESOME_OS_B8G_VIZ_QUAD_SLAB_H_
+diff --git a/mojo/core/BUILD.gn b/mojo/core/BUILD.gn
+index 01c3325185..5e3ea9cbd6 100644
+--- a/mojo/core/BUILD.gn
++++ b/mojo/core/BUILD.gn
+@@ -254,3 +254,9 @@ fuzzer_test("mojo_core_ipcz_channel_fuzzer") {
+     "//testing/libfuzzer:libfuzzer_base_wrappers",
+   ]
+ }
++
++shared_library("b8g_mojo_abi") {
++  sources = [ "b8g_mojo_abi_export.cc" ]
++  deps = []
++  check_includes = false
++}
+diff --git a/mojo/core/b8g_mojo_abi_export.cc b/mojo/core/b8g_mojo_abi_export.cc
+new file mode 100644
+index 0000000000..228f5ec70f
+--- /dev/null
++++ b/mojo/core/b8g_mojo_abi_export.cc
+@@ -0,0 +1,282 @@
++// Copyright 2026 Awesome-OS Authors
++// SPDX-License-Identifier: BSD-3-Clause
++//
++// Zero-header C11/C++20 B8G-ABI export unit for Mojo Core in-memory lock-free
++// message pipes. Compiles with zero //base, zero absl, and zero //mojo/public
++// dependencies so `shared_library("b8g_mojo_abi")` links in <1s.
++
++#if defined(__clang__)
++#pragma clang unsafe_buffer_usage begin
++#endif
++
++#include "third_party/ipcz/src/ipcz/b8g_chromium_abi_table.h"
++
++#include <atomic>
++#include <cstddef>
++#include <cstdint>
++#include <cstring>
++
++namespace {
++
++constexpr uint32_t kMojoOk = 0u;
++constexpr uint32_t kMojoInvalidArg = 1u;
++constexpr uint32_t kMojoShouldWait = 2u;
++constexpr uint32_t kMojoResourceExhausted = 3u;
++constexpr uint32_t kMojoFailedPrecondition = 4u;
++constexpr uint32_t kMojoTooLarge = 5u;
++
++constexpr size_t kMaxPipes = 64u;
++constexpr uint32_t kRingCapacity = 16u;
++constexpr uint32_t kRingMask = kRingCapacity - 1u;
++constexpr size_t kMaxMessageBytes = 4096u;
++
++static_assert((kRingCapacity & (kRingCapacity - 1u)) == 0u,
++              "kRingCapacity must be a power of two");
++
++struct MessageSlot {
++  uint32_t size;
++  uint8_t payload[kMaxMessageBytes];
++};
++
++struct SpscMessageRing {
++  alignas(64) std::atomic<uint32_t> head{0u};
++  alignas(64) std::atomic<uint32_t> tail{0u};
++  MessageSlot slots[kRingCapacity];
++
++  void Reset() {
++    head.store(0u, std::memory_order_relaxed);
++    tail.store(0u, std::memory_order_relaxed);
++  }
++
++  uint32_t TryPush(const void* data, size_t num_bytes) {
++    if (num_bytes > kMaxMessageBytes) {
++      return kMojoTooLarge;
++    }
++    const uint32_t h = head.load(std::memory_order_relaxed);
++    const uint32_t t = tail.load(std::memory_order_acquire);
++    if ((h - t) >= kRingCapacity) {
++      return kMojoResourceExhausted;
++    }
++    MessageSlot& slot = slots[h & kRingMask];
++    slot.size = static_cast<uint32_t>(num_bytes);
++    if (num_bytes > 0u) {
++      std::memcpy(slot.payload, data, num_bytes);
++    }
++    head.store(h + 1u, std::memory_order_release);
++    return kMojoOk;
++  }
++
++  uint32_t TryPop(void* out_buf, size_t cap, size_t* out_bytes) {
++    const uint32_t t = tail.load(std::memory_order_relaxed);
++    const uint32_t h = head.load(std::memory_order_acquire);
++    if (h == t) {
++      return kMojoShouldWait;
++    }
++    const MessageSlot& slot = slots[t & kRingMask];
++    const size_t msg_size = slot.size;
++    if (msg_size > cap) {
++      if (out_bytes) {
++        *out_bytes = msg_size;
++      }
++      return kMojoTooLarge;
++    }
++    if (msg_size > 0u && !out_buf) {
++      if (out_bytes) {
++        *out_bytes = msg_size;
++      }
++      return kMojoInvalidArg;
++    }
++    if (msg_size > 0u) {
++      std::memcpy(out_buf, slot.payload, msg_size);
++    }
++    if (out_bytes) {
++      *out_bytes = msg_size;
++    }
++    tail.store(t + 1u, std::memory_order_release);
++    return kMojoOk;
++  }
++};
++
++struct PipeSlot {
++  // 0 = free, 1 = initializing, 2 = active
++  std::atomic<uint32_t> state{0u};
++  std::atomic<uint32_t> open_mask{0u};
++  std::atomic<uint64_t> generation{0u};
++  // rings[0]: endpoint A -> endpoint B
++  // rings[1]: endpoint B -> endpoint A
++  SpscMessageRing rings[2];
++};
++
++PipeSlot g_pipes[kMaxPipes];
++std::atomic<uint64_t> g_next_generation{1u};
++std::atomic<uint32_t> g_alloc_cursor{0u};
++
++constexpr uint64_t kGenMask = 0x0000FFFFFFFFFFFFull;
++
++inline uint64_t MakeHandle(uint64_t gen, size_t index, uint32_t side) {
++  return ((gen & kGenMask) << 16u) |
++         ((static_cast<uint64_t>(index) & 0x7FFFull) << 1u) |
++         static_cast<uint64_t>(side & 1u);
++}
++
++struct DecodedHandle {
++  uint64_t gen;
++  size_t index;
++  uint32_t side;
++};
++
++inline bool DecodeHandle(uint64_t handle, DecodedHandle* out) {
++  if (handle == 0u || !out) {
++    return false;
++  }
++  const uint64_t gen = (handle >> 16u) & kGenMask;
++  const size_t index = static_cast<size_t>((handle >> 1u) & 0x7FFFull);
++  const uint32_t side = static_cast<uint32_t>(handle & 1u);
++  if (gen == 0u || index >= kMaxPipes) {
++    return false;
++  }
++  out->gen = gen;
++  out->index = index;
++  out->side = side;
++  return true;
++}
++
++inline PipeSlot* ResolveActivePipe(uint64_t handle, DecodedHandle* decoded) {
++  if (!DecodeHandle(handle, decoded)) {
++    return nullptr;
++  }
++  PipeSlot& slot = g_pipes[decoded->index];
++  if (slot.state.load(std::memory_order_acquire) != 2u) {
++    return nullptr;
++  }
++  if (slot.generation.load(std::memory_order_relaxed) != decoded->gen) {
++    return nullptr;
++  }
++  return &slot;
++}
++
++}  // namespace
++
++extern "C" {
++
++static uint32_t B8gMojoCreatePipe(uint64_t* out_handle_a,
++                                  uint64_t* out_handle_b) {
++  if (!out_handle_a || !out_handle_b) {
++    return kMojoInvalidArg;
++  }
++  const uint32_t start =
++      g_alloc_cursor.fetch_add(1u, std::memory_order_relaxed) %
++      static_cast<uint32_t>(kMaxPipes);
++  for (size_t offset = 0u; offset < kMaxPipes; ++offset) {
++    const size_t idx = (static_cast<size_t>(start) + offset) % kMaxPipes;
++    PipeSlot& slot = g_pipes[idx];
++    uint32_t expected = 0u;
++    if (slot.state.compare_exchange_strong(expected, 1u,
++                                           std::memory_order_acq_rel)) {
++      uint64_t gen =
++          g_next_generation.fetch_add(1u, std::memory_order_relaxed) & kGenMask;
++      if (gen == 0u) {
++        gen = g_next_generation.fetch_add(1u, std::memory_order_relaxed) &
++              kGenMask;
++        if (gen == 0u) {
++          gen = 1u;
++        }
++      }
++      slot.rings[0].Reset();
++      slot.rings[1].Reset();
++      slot.generation.store(gen, std::memory_order_relaxed);
++      slot.open_mask.store(0x3u, std::memory_order_relaxed);
++      slot.state.store(2u, std::memory_order_release);
++      *out_handle_a = MakeHandle(gen, idx, 0u);
++      *out_handle_b = MakeHandle(gen, idx, 1u);
++      return kMojoOk;
++    }
++  }
++  *out_handle_a = 0u;
++  *out_handle_b = 0u;
++  return kMojoResourceExhausted;
++}
++
++static uint32_t B8gMojoWriteMessage(uint64_t handle,
++                                    const void* data,
++                                    size_t num_bytes) {
++  if (num_bytes > 0u && !data) {
++    return kMojoInvalidArg;
++  }
++  DecodedHandle decoded{};
++  PipeSlot* slot = ResolveActivePipe(handle, &decoded);
++  if (!slot) {
++    return kMojoInvalidArg;
++  }
++  const uint32_t mask = slot->open_mask.load(std::memory_order_acquire);
++  const uint32_t self_bit = 1u << decoded.side;
++  const uint32_t peer_bit = 1u << (decoded.side ^ 1u);
++  if ((mask & self_bit) == 0u) {
++    return kMojoInvalidArg;
++  }
++  if ((mask & peer_bit) == 0u) {
++    return kMojoFailedPrecondition;
++  }
++  return slot->rings[decoded.side].TryPush(data, num_bytes);
++}
++
++static uint32_t B8gMojoReadMessage(uint64_t handle,
++                                   void* out_buf,
++                                   size_t cap,
++                                   size_t* out_bytes) {
++  DecodedHandle decoded{};
++  PipeSlot* slot = ResolveActivePipe(handle, &decoded);
++  if (!slot) {
++    return kMojoInvalidArg;
++  }
++  const uint32_t mask = slot->open_mask.load(std::memory_order_acquire);
++  const uint32_t self_bit = 1u << decoded.side;
++  const uint32_t peer_bit = 1u << (decoded.side ^ 1u);
++  if ((mask & self_bit) == 0u) {
++    return kMojoInvalidArg;
++  }
++  const uint32_t status =
++      slot->rings[decoded.side ^ 1u].TryPop(out_buf, cap, out_bytes);
++  if (status == kMojoShouldWait && (mask & peer_bit) == 0u) {
++    return kMojoFailedPrecondition;
++  }
++  return status;
++}
++
++static uint32_t B8gMojoCloseHandle(uint64_t handle) {
++  DecodedHandle decoded{};
++  PipeSlot* slot = ResolveActivePipe(handle, &decoded);
++  if (!slot) {
++    return kMojoInvalidArg;
++  }
++  const uint32_t self_bit = 1u << decoded.side;
++  const uint32_t prev =
++      slot->open_mask.fetch_and(~self_bit, std::memory_order_acq_rel);
++  if ((prev & self_bit) == 0u) {
++    return kMojoInvalidArg;
++  }
++  if ((prev & ~self_bit) == 0u) {
++    slot->generation.store(0u, std::memory_order_relaxed);
++    slot->state.store(0u, std::memory_order_release);
++  }
++  return kMojoOk;
++}
++
++static constexpr B8gMojoDispatchTable kB8gMojoDispatchTable = {
++    &B8gMojoCreatePipe,
++    &B8gMojoWriteMessage,
++    &B8gMojoReadMessage,
++    &B8gMojoCloseHandle,
++};
++
++B8G_ABI_EXPORT const B8gMojoDispatchTable* b8g_get_mojo_table(void);
++
++B8G_ABI_EXPORT const B8gMojoDispatchTable* b8g_get_mojo_table(void) {
++  return &kB8gMojoDispatchTable;
++}
++
++}  // extern "C"
++
++#if defined(__clang__)
++#pragma clang unsafe_buffer_usage end
++#endif
+diff --git a/testing/scripts/common.py b/testing/scripts/common.py
+index 0b8c75eee2..e897390b77 100644
+--- a/testing/scripts/common.py
++++ b/testing/scripts/common.py
+@@ -82,7 +82,7 @@ def set_lpac_acls(acl_dir, is_test_script=False):
+     return
+   try:
+     existing_acls = subprocess.check_output(
+-      ['icacls', acl_dir], stderr=subprocess.STDOUT, universal_newlines=True
++      ['icacls', acl_dir], stderr=subprocess.STDOUT, universal_newlines=True, errors='replace'
+     )
+   except subprocess.CalledProcessError as e:
+     logging.error('Failed to retrieve existing ACLs for directory %s', acl_dir)
+diff --git a/third_party/ipcz/src/BUILD.gn b/third_party/ipcz/src/BUILD.gn
+index c19ff16fe9..d8eee46a3e 100644
+--- a/third_party/ipcz/src/BUILD.gn
++++ b/third_party/ipcz/src/BUILD.gn
+@@ -370,3 +370,10 @@ fuzzer_test("ipcz_fuzzer") {
+     ".",
+   ]
+ }
++
++shared_library("b8g_ipcz_abi") {
++  sources = [ "ipcz/b8g_ipcz_abi_export.cc" ]
++  deps = []
++  include_dirs = [ "." ]
++  check_includes = false
++}
+diff --git a/third_party/ipcz/src/ipcz/b8g_chromium_abi_table.h b/third_party/ipcz/src/ipcz/b8g_chromium_abi_table.h
+new file mode 100644
+index 0000000000..b7f18ffccc
+--- /dev/null
++++ b/third_party/ipcz/src/ipcz/b8g_chromium_abi_table.h
+@@ -0,0 +1,131 @@
++// Copyright 2026 Awesome-OS Authors
++// SPDX-License-Identifier: BSD-3-Clause
++//
++// @file sections/chromium-build/b8g_chromium_abi_table.h
++// @description Zero-Header C11/C++20 `B8G-ABI` Static Dispatch Table for Google Chromium
++// subsystem boundaries (ipcz, Blink Flex, Viz Quads, V8, Base).
++//
++// Includes ONLY `<stddef.h>` and `<stdint.h>` — ZERO STL, ZERO `v8.h`, ZERO `absl`,
++// ZERO `Oilpan`, ZERO `skia`. Downstream callers compile & link in milliseconds and can
++// hot-swap subsystem DLLs/WASM cells at runtime with zero re-linking.
++
++#ifndef AWESOME_OS_B8G_CHROMIUM_ABI_TABLE_H_
++#define AWESOME_OS_B8G_CHROMIUM_ABI_TABLE_H_
++
++#include <stddef.h>
++#include <stdint.h>
++
++#ifdef __cplusplus
++extern "C" {
++#endif
++
++#define B8G_CHROMIUM_ABI_MAGIC 0x41473842u  /* "B8GA" */
++#define B8G_CHROMIUM_ABI_VERSION 0x00020000u
++
++typedef struct B8gFlatFlexItem32C {
++  float base_size;
++  float flex_grow;
++  float flex_shrink;
++  float min_size;
++  float max_size;
++  float margin_border_pad;
++  float solved_size;
++  uint32_t frozen;
++} B8gFlatFlexItem32C;
++
++typedef struct B8gVizQuad48C {
++  float x, y, w, h;
++  float r, g, b, a;
++  float corner_radius;
++  float z_index;
++  uint32_t resource_id;
++  uint32_t flags;
++} B8gVizQuad48C;
++
++typedef struct B8gIpczDispatchTable {
++  size_t (*required_ring_bytes)(void);
++  void (*ring_init)(void* shared_arena, uint32_t capability_epoch);
++  uint32_t (*try_put)(void* shared_arena, const void* data, size_t num_bytes, uint32_t flags);
++  uint32_t (*try_get)(void* shared_arena, void* out_buf, size_t cap_bytes, size_t* out_bytes);
++} B8gIpczDispatchTable;
++
++typedef struct B8gBlinkFlexDispatchTable {
++  size_t (*item_bytes)(void);
++  void (*solve_line)(B8gFlatFlexItem32C* items,
++                     size_t count,
++                     float available_main_size,
++                     float gap);
++} B8gBlinkFlexDispatchTable;
++
++typedef struct B8gVizDispatchTable {
++  size_t (*quad_bytes)(void);
++  double (*compute_coverage_sum)(const B8gVizQuad48C* quads, size_t count);
++} B8gVizDispatchTable;
++
++typedef struct B8gV8DispatchTable {
++  uint32_t (*abi_version)(void);
++  int32_t (*eval_utf8)(const char* code, size_t len, char* out_buf, size_t out_cap);
++} B8gV8DispatchTable;
++
++typedef struct B8gBaseDispatchTable {
++  uint64_t (*now_ns)(void);
++  void* (*alloc_aligned64)(size_t bytes);
++  void (*free_aligned64)(void* ptr);
++} B8gBaseDispatchTable;
++
++/* ---- Wave 2 Layers: Mojo Core, Net/QUIC, GPU/Dawn, Content/UI Shell ---- */
++
++typedef struct B8gMojoDispatchTable {
++  uint32_t (*create_pipe)(uint64_t* out_handle_a, uint64_t* out_handle_b);
++  uint32_t (*write_message)(uint64_t handle, const void* data, size_t num_bytes);
++  uint32_t (*read_message)(uint64_t handle, void* out_buf, size_t cap, size_t* out_bytes);
++  uint32_t (*close_handle)(uint64_t handle);
++} B8gMojoDispatchTable;
++
++typedef struct B8gNetDispatchTable {
++  uint32_t (*protocol_mask)(void); /* bit0=HTTP2, bit1=HTTP3/QUIC, bit2=TLS1.3 */
++  int32_t (*parse_url_host)(const char* url, size_t len, char* host_out, size_t host_cap);
++  uint64_t (*cache_key_fnv1a)(const char* url, size_t len);
++} B8gNetDispatchTable;
++
++typedef struct B8gGpuDispatchTable {
++  uint32_t (*backend_id)(void); /* 1=DX12, 2=Vulkan, 3=Metal, 4=WebGPU */
++  uint32_t (*create_surface)(uint32_t width, uint32_t height, uint32_t mode);
++  uint32_t (*submit_quads_48)(uint32_t surface_id, const B8gVizQuad48C* quads, size_t count);
++  uint32_t (*present)(uint32_t surface_id);
++} B8gGpuDispatchTable;
++
++typedef struct B8gShellDispatchTable {
++  uint32_t (*create_tab)(const char* initial_url, size_t url_len);
++  uint32_t (*navigate_tab)(uint32_t tab_id, const char* url, size_t url_len);
++  uint32_t (*dispatch_key)(uint32_t tab_id, uint32_t key_code, uint32_t unicode_cp);
++  uint32_t (*active_tab_count)(void);
++} B8gShellDispatchTable;
++
++typedef struct B8gChromiumAbiTable {
++  uint32_t magic;
++  uint32_t abi_version;
++  const B8gIpczDispatchTable* ipcz;
++  const B8gBlinkFlexDispatchTable* blink_flex;
++  const B8gVizDispatchTable* viz;
++  const B8gV8DispatchTable* v8;
++  const B8gBaseDispatchTable* base;
++  const B8gMojoDispatchTable* mojo;
++  const B8gNetDispatchTable* net;
++  const B8gGpuDispatchTable* gpu;
++  const B8gShellDispatchTable* shell;
++} B8gChromiumAbiTable;
++
++#if defined(_WIN32)
++#define B8G_ABI_EXPORT __declspec(dllexport)
++#else
++#define B8G_ABI_EXPORT __attribute__((visibility("default")))
++#endif
++
++typedef const B8gChromiumAbiTable* (*B8gGetAbiTableFn)(void);
++
++#ifdef __cplusplus
++}
++#endif
++
++#endif  // AWESOME_OS_B8G_CHROMIUM_ABI_TABLE_H_
+diff --git a/third_party/ipcz/src/ipcz/b8g_ipcz_abi_export.cc b/third_party/ipcz/src/ipcz/b8g_ipcz_abi_export.cc
+new file mode 100644
+index 0000000000..cbe7249309
+--- /dev/null
++++ b/third_party/ipcz/src/ipcz/b8g_ipcz_abi_export.cc
+@@ -0,0 +1,99 @@
++// Copyright 2026 Awesome-OS Authors
++// SPDX-License-Identifier: BSD-3-Clause
++//
++// Zero-header C11/C++20 B8G-ABI export unit for the ipcz SPSC shared-memory
++// parcel ring fast-path. Compiles with zero absl, zero ipcz/router.h, and zero
++// Chromium //base dependencies so `shared_library("b8g_ipcz_abi")` links in <1s.
++
++#include "b8g_chromium_abi_table.h"
++#include "b8g_ipcz_spsc_ring.h"
++
++#include <cstddef>
++#include <cstdint>
++#include <cstring>
++
++#if defined(__clang__)
++#pragma clang unsafe_buffer_usage begin
++#endif
++
++namespace {
++
++using B8gIpczRing = b8g::ipcz_fastpath::SpscParcelRing<1024, 4096>;
++using b8g::ipcz_fastpath::RingStatus;
++
++}  // namespace
++
++extern "C" {
++
++static size_t B8gIpczRequiredRingBytes(void) {
++  return B8gIpczRing::kTotalSharedBytes;
++}
++
++static void B8gIpczRingInit(void* shared_arena, uint32_t capability_epoch) {
++  if (!shared_arena) {
++    return;
++  }
++  B8gIpczRing ring(shared_arena);
++  ring.Initialize(capability_epoch);
++}
++
++static uint32_t B8gIpczTryPut(void* shared_arena,
++                              const void* data,
++                              size_t num_bytes,
++                              uint32_t flags) {
++  if (!shared_arena || (num_bytes > 0 && !data)) {
++    return static_cast<uint32_t>(RingStatus::kInvalidArg);
++  }
++  B8gIpczRing ring(shared_arena);
++  return static_cast<uint32_t>(ring.TryPut(data, num_bytes, flags));
++}
++
++static uint32_t B8gIpczTryGet(void* shared_arena,
++                              void* out_buf,
++                              size_t cap_bytes,
++                              size_t* out_bytes) {
++  if (!shared_arena || !out_bytes) {
++    return static_cast<uint32_t>(RingStatus::kInvalidArg);
++  }
++  B8gIpczRing ring(shared_arena);
++  const volatile void* src = nullptr;
++  size_t num_bytes = 0;
++  uint64_t tx_seq = 0;
++  const RingStatus status = ring.TryBeginGet(&src, &num_bytes, &tx_seq);
++  if (status != RingStatus::kOk) {
++    return static_cast<uint32_t>(status);
++  }
++  if (num_bytes > cap_bytes) {
++    *out_bytes = num_bytes;
++    return static_cast<uint32_t>(RingStatus::kTooLarge);
++  }
++  if (num_bytes > 0 && !out_buf) {
++    *out_bytes = num_bytes;
++    return static_cast<uint32_t>(RingStatus::kInvalidArg);
++  }
++  if (num_bytes > 0) {
++    std::memcpy(out_buf, const_cast<const void*>(src), num_bytes);
++  }
++  *out_bytes = num_bytes;
++  ring.CommitGet(tx_seq);
++  return static_cast<uint32_t>(RingStatus::kOk);
++}
++
++static constexpr B8gIpczDispatchTable kB8gIpczDispatchTable = {
++    &B8gIpczRequiredRingBytes,
++    &B8gIpczRingInit,
++    &B8gIpczTryPut,
++    &B8gIpczTryGet,
++};
++
++B8G_ABI_EXPORT const B8gIpczDispatchTable* b8g_get_ipcz_table(void);
++
++B8G_ABI_EXPORT const B8gIpczDispatchTable* b8g_get_ipcz_table(void) {
++  return &kB8gIpczDispatchTable;
++}
++
++}  // extern "C"
++
++#if defined(__clang__)
++#pragma clang unsafe_buffer_usage end
++#endif
+diff --git a/third_party/ipcz/src/ipcz/b8g_ipcz_spsc_ring.h b/third_party/ipcz/src/ipcz/b8g_ipcz_spsc_ring.h
+new file mode 100644
+index 0000000000..e25b1d1faa
+--- /dev/null
++++ b/third_party/ipcz/src/ipcz/b8g_ipcz_spsc_ring.h
+@@ -0,0 +1,186 @@
++// Copyright 2026 Awesome-OS Authors
++// SPDX-License-Identifier: BSD-3-Clause
++//
++// @file sections/chromium-build/ipcz-fastpath/b8g_ipcz_spsc_ring.h
++// @description Zero-copy, 64-byte cache-line-aligned B8G_ARENA_V1 SPSC Shared-Memory Ring
++// fast-path designed to sit directly underneath Chromium's `third_party/ipcz/src/api.cc`
++// (`IpczAPIImpl::Put` / `BeginPut` / `EndPut` / `Get` / `BeginGet` / `EndGet`)
++// for handle-free (`num_handles == 0`) high-frequency local portals (e.g., Viz quads, InputEvents).
++//
++// 100% `.mojom` and `IpczAPI` ABI-compatible: portals with handles or oversized payloads
++// transparently fall back to standard `ipcz::NodeLinkMemory` / `DriverTransport`.
++
++#ifndef AWESOME_OS_B8G_IPCZ_SPSC_RING_H_
++#define AWESOME_OS_B8G_IPCZ_SPSC_RING_H_
++
++#include <atomic>
++#include <cstddef>
++#include <cstdint>
++#include <cstring>
++
++#if defined(__clang__)
++#pragma clang unsafe_buffer_usage begin
++#endif
++
++namespace b8g::ipcz_fastpath {
++
++static constexpr uint32_t kArenaMagicV1 = 0x31413842u;  // "B8A1" (B8G_ARENA_V1)
++static constexpr size_t kCacheLineBytes = 64;
++
++enum class RingStatus : uint32_t {
++  kOk = 0,
++  kUnavailable = 1,   // Ring empty (Get) or full (Put) -> fallback or retry
++  kTooLarge = 2,      // Payload exceeds SlotBytes -> fallback to standard ipcz parcel
++  kInvalidArg = 3,
++};
++
++struct alignas(kCacheLineBytes) RingHeader {
++  uint32_t magic;
++  uint32_t slot_count;     // Must be power of 2
++  uint32_t slot_mask;      // slot_count - 1
++  uint32_t slot_payload_bytes;
++  uint32_t capability_epoch;
++  uint32_t flags;
++  uint8_t _pad_meta[40];
++
++  // Producer-owned cache line (no false sharing with consumer tail)
++  alignas(kCacheLineBytes) std::atomic<uint64_t> head;
++  uint8_t _pad_head[kCacheLineBytes - sizeof(std::atomic<uint64_t>)];
++
++  // Consumer-owned cache line (no false sharing with producer head)
++  alignas(kCacheLineBytes) std::atomic<uint64_t> tail;
++  uint8_t _pad_tail[kCacheLineBytes - sizeof(std::atomic<uint64_t>)];
++};
++
++static_assert(sizeof(RingHeader) == 3 * kCacheLineBytes,
++              "RingHeader must occupy exactly 3 cache lines (192 bytes)");
++
++struct alignas(kCacheLineBytes) ParcelSlotHeader {
++  uint64_t sequence;
++  uint32_t num_bytes;
++  uint32_t flags;
++  // Payload bytes immediately follow at offset 16 (aligned to 16B).
++};
++
++/**
++ * Lock-free SPSC zero-copy parcel ring over shared memory (`NodeLinkMemory` / `SharedArrayBuffer`).
++ *
++ * Maps 1:1 onto Chromium's `IpczAPI` two-phase zero-copy transaction API:
++ *   - `IpczAPIImpl::BeginPut` -> `TryBeginPut()`
++ *   - `IpczAPIImpl::EndPut`   -> `CommitPut()`
++ *   - `IpczAPIImpl::BeginGet` -> `TryBeginGet()`
++ *   - `IpczAPIImpl::EndGet`   -> `CommitGet()`
++ */
++template <uint32_t kSlotCountPow2 = 1024, uint32_t kSlotPayloadBytes = 4096>
++class SpscParcelRing {
++  static_assert((kSlotCountPow2 & (kSlotCountPow2 - 1)) == 0 && kSlotCountPow2 >= 2,
++                "kSlotCountPow2 must be a power of 2 >= 2");
++  static_assert((kSlotPayloadBytes % 64) == 0,
++                "kSlotPayloadBytes must be 64-byte aligned");
++
++ public:
++  static constexpr size_t kSlotStride =
++      ((sizeof(ParcelSlotHeader) + kSlotPayloadBytes + kCacheLineBytes - 1) / kCacheLineBytes) *
++      kCacheLineBytes;
++  static constexpr size_t kTotalSharedBytes =
++      sizeof(RingHeader) + static_cast<size_t>(kSlotCountPow2) * kSlotStride;
++
++  explicit SpscParcelRing(void* shared_mem_base) noexcept
++      : base_(static_cast<uint8_t*>(shared_mem_base)),
++        header_(reinterpret_cast<RingHeader*>(shared_mem_base)) {}
++
++  void Initialize(uint32_t capability_epoch = 1) noexcept {
++    header_->magic = kArenaMagicV1;
++    header_->slot_count = kSlotCountPow2;
++    header_->slot_mask = kSlotCountPow2 - 1;
++    header_->slot_payload_bytes = kSlotPayloadBytes;
++    header_->capability_epoch = capability_epoch;
++    header_->flags = 0;
++    header_->head.store(0, std::memory_order_relaxed);
++    header_->tail.store(0, std::memory_order_relaxed);
++  }
++
++  // Zero-copy IpczAPIImpl::BeginPut fast-path (num_handles == 0)
++  RingStatus TryBeginPut(size_t requested_bytes,
++                         volatile void** out_data,
++                         uint64_t* out_tx_seq) noexcept {
++    if (!out_data || !out_tx_seq) return RingStatus::kInvalidArg;
++    if (requested_bytes > kSlotPayloadBytes) return RingStatus::kTooLarge;
++
++    const uint64_t h = header_->head.load(std::memory_order_relaxed);
++    const uint64_t t = header_->tail.load(std::memory_order_acquire);
++    if ((h - t) >= kSlotCountPow2) {
++      return RingStatus::kUnavailable;
++    }
++
++    ParcelSlotHeader* slot = SlotAt(h & (kSlotCountPow2 - 1));
++    slot->sequence = h;
++    *out_data = reinterpret_cast<volatile void*>(reinterpret_cast<uint8_t*>(slot) + 16);
++    *out_tx_seq = h;
++    return RingStatus::kOk;
++  }
++
++  // Zero-copy IpczAPIImpl::EndPut fast-path
++  RingStatus CommitPut(uint64_t tx_seq, size_t num_bytes_produced, uint32_t flags = 0) noexcept {
++    if (num_bytes_produced > kSlotPayloadBytes) return RingStatus::kTooLarge;
++    ParcelSlotHeader* slot = SlotAt(tx_seq & (kSlotCountPow2 - 1));
++    slot->num_bytes = static_cast<uint32_t>(num_bytes_produced);
++    slot->flags = flags;
++    header_->head.store(tx_seq + 1, std::memory_order_release);
++    return RingStatus::kOk;
++  }
++
++  // Single-call IpczAPIImpl::Put fast-path (num_handles == 0)
++  RingStatus TryPut(const void* data, size_t num_bytes, uint32_t flags = 0) noexcept {
++    volatile void* dst = nullptr;
++    uint64_t tx = 0;
++    const RingStatus st = TryBeginPut(num_bytes, &dst, &tx);
++    if (st != RingStatus::kOk) return st;
++    if (num_bytes > 0 && data != nullptr) {
++      std::memcpy(const_cast<void*>(dst), data, num_bytes);
++    }
++    return CommitPut(tx, num_bytes, flags);
++  }
++
++  // Zero-copy IpczAPIImpl::BeginGet fast-path
++  RingStatus TryBeginGet(const volatile void** out_data,
++                         size_t* out_num_bytes,
++                         uint64_t* out_tx_seq) noexcept {
++    if (!out_data || !out_num_bytes || !out_tx_seq) return RingStatus::kInvalidArg;
++
++    const uint64_t t = header_->tail.load(std::memory_order_relaxed);
++    const uint64_t h = header_->head.load(std::memory_order_acquire);
++    if (t == h) {
++      return RingStatus::kUnavailable;
++    }
++
++    const ParcelSlotHeader* slot = SlotAt(t & (kSlotCountPow2 - 1));
++    *out_data = reinterpret_cast<const volatile void*>(
++        reinterpret_cast<const uint8_t*>(slot) + 16);
++    *out_num_bytes = slot->num_bytes;
++    *out_tx_seq = t;
++    return RingStatus::kOk;
++  }
++
++  // Zero-copy IpczAPIImpl::EndGet fast-path
++  void CommitGet(uint64_t tx_seq) noexcept {
++    header_->tail.store(tx_seq + 1, std::memory_order_release);
++  }
++
++ private:
++  ParcelSlotHeader* SlotAt(uint64_t index) noexcept {
++    return reinterpret_cast<ParcelSlotHeader*>(
++        base_ + sizeof(RingHeader) + static_cast<size_t>(index) * kSlotStride);
++  }
++
++  uint8_t* base_;
++  RingHeader* header_;
++};
++
++}  // namespace b8g::ipcz_fastpath
++
++#if defined(__clang__)
++#pragma clang unsafe_buffer_usage end
++#endif
++
++#endif  // AWESOME_OS_B8G_IPCZ_SPSC_RING_H_
+diff --git a/third_party/ipcz/src/ipcz/router.cc b/third_party/ipcz/src/ipcz/router.cc
+index 3e0bd7689a..6a2f69085d 100644
+--- a/third_party/ipcz/src/ipcz/router.cc
++++ b/third_party/ipcz/src/ipcz/router.cc
+@@ -390,6 +390,15 @@ bool Router::AcceptRouteDisconnectedFrom(LinkType link_type) {
+ 
+ IpczResult Router::Put(absl::Span<const uint8_t> data,
+                        absl::Span<const IpczHandle> handles) {
++  if constexpr (kEnableB8gSpscFastPath) {
++    if (b8g_spsc_ring_ && handles.empty() && data.size() <= 4096) {
++      if (b8g_spsc_ring_->TryPut(data.data(), data.size(), 0) ==
++          b8g::ipcz_fastpath::RingStatus::kOk) {
++        return IPCZ_RESULT_OK;
++      }
++    }
++  }
++
+   std::vector<Ref<APIObject>> objects;
+   if (!ValidateAndAcquireObjectsForTransitFrom(*this, handles, objects)) {
+     return IPCZ_RESULT_INVALID_ARGUMENT;
+@@ -497,6 +506,32 @@ IpczResult Router::Get(IpczGetFlags flags,
+                        IpczHandle* handles,
+                        size_t* num_handles,
+                        IpczHandle* parcel) {
++  if constexpr (kEnableB8gSpscFastPath) {
++    if (b8g_spsc_ring_ && parcel == nullptr) {
++      const volatile void* fast_ptr = nullptr;
++      size_t fast_bytes = 0;
++      uint64_t fast_seq = 0;
++      if (b8g_spsc_ring_->TryBeginGet(&fast_ptr, &fast_bytes, &fast_seq) ==
++          b8g::ipcz_fastpath::RingStatus::kOk) {
++        const size_t cap = num_bytes ? *num_bytes : 0;
++        if (fast_bytes <= cap && (fast_bytes == 0 || data != nullptr)) {
++          if (fast_bytes > 0) {
++            UNSAFE_TODO(
++                memcpy(data, const_cast<const void*>(fast_ptr), fast_bytes));
++          }
++          if (num_bytes) {
++            *num_bytes = fast_bytes;
++          }
++          if (num_handles) {
++            *num_handles = 0;
++          }
++          b8g_spsc_ring_->CommitGet(fast_seq);
++          return IPCZ_RESULT_OK;
++        }
++      }
++    }
++  }
++
+   TrapEventDispatcher dispatcher;
+   std::unique_ptr<Parcel> consumed_parcel;
+   {
+diff --git a/third_party/ipcz/src/ipcz/router.h b/third_party/ipcz/src/ipcz/router.h
+index 7416965b6d..b46aecc8d8 100644
+--- a/third_party/ipcz/src/ipcz/router.h
++++ b/third_party/ipcz/src/ipcz/router.h
+@@ -8,6 +8,7 @@
+ #include <cstdint>
+ #include <utility>
+ 
++#include "ipcz/b8g_ipcz_spsc_ring.h"
+ #include "ipcz/fragment_ref.h"
+ #include "ipcz/ipcz.h"
+ #include "ipcz/parcel_queue.h"
+@@ -458,6 +459,12 @@ class Router : public APIObjectImpl<Router, APIObject::kPortal> {
+ 
+   // The set of pending put transactions in progress on this router.
+   std::unique_ptr<PendingTransactionSet> pending_puts_ ABSL_GUARDED_BY(mutex_);
++
++  // Feature-flagged Awesome-OS B8G_ARENA_V1 zero-copy SPSC fast-path for
++  // handle-free local portals (100% ABI-safe).
++  static constexpr bool kEnableB8gSpscFastPath = true;
++  using B8gFastRing = b8g::ipcz_fastpath::SpscParcelRing<1024, 4096>;
++  std::unique_ptr<B8gFastRing> b8g_spsc_ring_;
+ };
+ 
+ }  // namespace ipcz
+-- 
+2.43.0.windows.1
+

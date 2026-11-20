@@ -1,0 +1,172 @@
+{
+  "schema": "b8g.stub-roll.v3",
+  "generatedAt": "2026-11-20T02:52:26.485Z",
+  "auditedTotalThirdPartyDirs": 333,
+  "prunedNonAlgoDirs": 286,
+  "prunedPercent": 85.9,
+  "survivingStubTargets": 18,
+  "targets": [
+    {
+      "depId": "B8G_DEP_IPCZ",
+      "chromiumDir": "third_party/ipcz/src",
+      "tier": "Tier0-Boot",
+      "abiName": "b8g_ipcz_abi",
+      "getterSymbol": "b8g_get_ipcz_table",
+      "originDisposable": false,
+      "reason": "Lock-free SPSC IPC core (ALREADY BUILT: 12 KB DLL)"
+    },
+    {
+      "depId": "B8G_DEP_VIZ",
+      "chromiumDir": "components/viz/common",
+      "tier": "Tier0-Boot",
+      "abiName": "b8g_viz_abi",
+      "getterSymbol": "b8g_get_viz_table",
+      "originDisposable": true,
+      "reason": "48-byte WGSL GPU quad slab (ALREADY BUILT: 11.5 KB DLL)"
+    },
+    {
+      "depId": "B8G_DEP_MOJO",
+      "chromiumDir": "mojo/core",
+      "tier": "Tier0-Boot",
+      "abiName": "b8g_mojo_abi",
+      "getterSymbol": "b8g_get_mojo_table",
+      "originDisposable": false,
+      "reason": "Flat capability message router (ALREADY BUILT: 13 KB DLL)"
+    },
+    {
+      "depId": "B8G_DEP_BORINGSSL",
+      "chromiumDir": "third_party/boringssl",
+      "tier": "Tier0-Boot",
+      "abiName": "b8g_tls_abi",
+      "getterSymbol": "b8g_get_tls_table",
+      "originDisposable": true,
+      "reason": "185 constant-time crypto ASM kernels"
+    },
+    {
+      "depId": "B8G_DEP_ZSTD",
+      "chromiumDir": "third_party/zstd",
+      "tier": "Tier0-Boot",
+      "abiName": "b8g_zstd_abi",
+      "getterSymbol": "b8g_get_zstd_table",
+      "originDisposable": true,
+      "reason": "Fast streaming compression kernel"
+    },
+    {
+      "depId": "B8G_DEP_BROTLI",
+      "chromiumDir": "third_party/brotli",
+      "tier": "Tier0-Boot",
+      "abiName": "b8g_brotli_abi",
+      "getterSymbol": "b8g_get_brotli_table",
+      "originDisposable": true,
+      "reason": "HTTP/2+3 content-encoding decoder"
+    },
+    {
+      "depId": "B8G_DEP_SKIA",
+      "chromiumDir": "third_party/skia",
+      "tier": "Tier1-MediaGPU",
+      "abiName": "b8g_skia_abi",
+      "getterSymbol": "b8g_get_skia_table",
+      "originDisposable": true,
+      "reason": "20.22 MB raster/vector engine -> origin-scoped"
+    },
+    {
+      "depId": "B8G_DEP_DAWN",
+      "chromiumDir": "third_party/dawn",
+      "tier": "Tier1-MediaGPU",
+      "abiName": "b8g_dawn_abi",
+      "getterSymbol": "b8g_get_dawn_table",
+      "originDisposable": true,
+      "reason": "13.65 MB WebGPU/WGSL compiler -> lazy on navigator.gpu"
+    },
+    {
+      "depId": "B8G_DEP_FFMPEG",
+      "chromiumDir": "third_party/ffmpeg",
+      "tier": "Tier1-MediaGPU",
+      "abiName": "b8g_ffmpeg_abi",
+      "getterSymbol": "b8g_get_ffmpeg_table",
+      "originDisposable": true,
+      "reason": "122 ASM media kernels -> lazy on <video>/<audio>"
+    },
+    {
+      "depId": "B8G_DEP_DAV1D",
+      "chromiumDir": "third_party/dav1d",
+      "tier": "Tier1-MediaGPU",
+      "abiName": "b8g_dav1d_abi",
+      "getterSymbol": "b8g_get_dav1d_table",
+      "originDisposable": true,
+      "reason": "121 AV1 SIMD ASM kernels -> lazy on AV1 stream"
+    },
+    {
+      "depId": "B8G_DEP_LIBWEBP",
+      "chromiumDir": "third_party/libwebp",
+      "tier": "Tier1-MediaGPU",
+      "abiName": "b8g_webp_abi",
+      "getterSymbol": "b8g_get_webp_table",
+      "originDisposable": true,
+      "reason": "SIMD WebP decoder -> origin-disposable heap"
+    },
+    {
+      "depId": "B8G_DEP_LIBJPEG_TURBO",
+      "chromiumDir": "third_party/libjpeg_turbo",
+      "tier": "Tier1-MediaGPU",
+      "abiName": "b8g_jpeg_abi",
+      "getterSymbol": "b8g_get_jpeg_table",
+      "originDisposable": true,
+      "reason": "91 SIMD JPEG ASM kernels -> origin-disposable heap"
+    },
+    {
+      "depId": "B8G_DEP_HARFBUZZ",
+      "chromiumDir": "third_party/harfbuzz-ng",
+      "tier": "Tier1-MediaGPU",
+      "abiName": "b8g_harfbuzz_abi",
+      "getterSymbol": "b8g_get_harfbuzz_table",
+      "originDisposable": true,
+      "reason": "OpenType GSUB/GPOS text shaping kernel"
+    },
+    {
+      "depId": "B8G_DEP_FREETYPE",
+      "chromiumDir": "third_party/freetype",
+      "tier": "Tier1-MediaGPU",
+      "abiName": "b8g_freetype_abi",
+      "getterSymbol": "b8g_get_freetype_table",
+      "originDisposable": true,
+      "reason": "Glyph outline rasterizer"
+    },
+    {
+      "depId": "B8G_DEP_WEBRTC",
+      "chromiumDir": "third_party/webrtc",
+      "tier": "Tier2-OnDemand",
+      "abiName": "b8g_webrtc_abi",
+      "getterSymbol": "b8g_get_webrtc_table",
+      "originDisposable": true,
+      "reason": "31.85 MB DLL -> lazy on RTCPeerConnection"
+    },
+    {
+      "depId": "B8G_DEP_PDFIUM",
+      "chromiumDir": "third_party/pdfium",
+      "tier": "Tier2-OnDemand",
+      "abiName": "b8g_pdfium_abi",
+      "getterSymbol": "b8g_get_pdfium_table",
+      "originDisposable": true,
+      "reason": "11.33 MB DLL -> lazy on application/pdf"
+    },
+    {
+      "depId": "B8G_DEP_ICU",
+      "chromiumDir": "third_party/icu",
+      "tier": "Tier2-OnDemand",
+      "abiName": "b8g_icu_abi",
+      "getterSymbol": "b8g_get_icu_table",
+      "originDisposable": true,
+      "reason": "9.03 MB Unicode UCA/BiDi tables -> lazy Intl"
+    },
+    {
+      "depId": "B8G_DEP_SQLITE",
+      "chromiumDir": "third_party/sqlite",
+      "tier": "Tier2-OnDemand",
+      "abiName": "b8g_sqlite_abi",
+      "getterSymbol": "b8g_get_sqlite_table",
+      "originDisposable": true,
+      "reason": "1.18 MB -> lazy on OPFS/IndexedDB"
+    }
+  ]
+}
